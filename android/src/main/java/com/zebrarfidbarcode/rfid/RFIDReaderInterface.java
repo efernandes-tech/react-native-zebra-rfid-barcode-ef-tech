@@ -20,15 +20,12 @@ import com.zebra.rfid.api3.START_TRIGGER_TYPE;
 import com.zebra.rfid.api3.STATUS_EVENT_TYPE;
 import com.zebra.rfid.api3.STOP_TRIGGER_TYPE;
 import com.zebra.rfid.api3.TagData;
-import com.zebra.rfid.api3.TagDataArray;
-import com.zebra.rfid.api3.TriggerInfo;
 
 import java.util.ArrayList;
 
 public class RFIDReaderInterface implements RfidEventsListener {
-  private IRFIDReaderListener listener;
-
-  private final String TAG = "RFIDReaderIml";
+  private final IRFIDReaderListener listener;
+  private final String TAG = "RFIDReaderInterface";
   private Readers readers;
   private ArrayList<ReaderDevice> availableRFIDReaderList;
   public static ReaderDevice readerDevice;
@@ -36,129 +33,118 @@ public class RFIDReaderInterface implements RfidEventsListener {
 
   public RFIDReaderInterface(IRFIDReaderListener listener) {
     this.listener = listener;
+    Log.d(TAG, "RFIDReaderInterface initialized.");
   }
 
   public ArrayList<ReaderDevice> getAvailableReaders() {
     try {
+      Log.d(TAG, "Fetching available RFID readers.");
       return readers.GetAvailableRFIDReaderList();
     } catch (Exception e) {
+      Log.e(TAG, "Error fetching RFID readers: " + e.getMessage());
       return new ArrayList<>();
     }
   }
 
   public void connect(Context context, String scannerName) {
-    // Init Readers
+    Log.d(TAG, "Initializing readers and attempting connection to: " + scannerName);
     readers = new Readers(context, ENUM_TRANSPORT.ALL);
     try {
       availableRFIDReaderList = readers.GetAvailableRFIDReaderList();
       if (availableRFIDReaderList != null && !availableRFIDReaderList.isEmpty()) {
-        // get first reader from list
         for (ReaderDevice rfid : availableRFIDReaderList) {
+          Log.d(TAG, "Available reader found: " + rfid.getName());
           if (rfid.getName().equals(scannerName)) {
             readerDevice = rfid;
             reader = readerDevice.getRFIDReader();
             if (!reader.isConnected()) {
               reader.connect();
+              Log.d(TAG, "Successfully connected to: " + scannerName);
               configureReader();
+            } else {
+              Log.d(TAG, "Reader already connected: " + scannerName);
             }
           }
         }
+      } else {
+        Log.w(TAG, "No RFID readers found.");
       }
     } catch (InvalidUsageException | OperationFailureException e) {
-      e.printStackTrace();
+      Log.e(TAG, "Error connecting to reader: " + e.getMessage());
     }
   }
 
   private void configureReader() {
+    Log.d(TAG, "Configuring reader...");
     if (reader.isConnected()) {
       TriggerInfo triggerInfo = new TriggerInfo();
       triggerInfo.StartTrigger.setTriggerType(START_TRIGGER_TYPE.START_TRIGGER_TYPE_IMMEDIATE);
       triggerInfo.StopTrigger.setTriggerType(STOP_TRIGGER_TYPE.STOP_TRIGGER_TYPE_IMMEDIATE);
       try {
-        // receive events from reader
         reader.Events.addEventsListener(this);
-        // HH event
         reader.Events.setHandheldEvent(true);
-        // tag event with tag data
         reader.Events.setTagReadEvent(true);
-        // application will collect tag using getReadTags API
         reader.Events.setAttachTagDataWithReadEvent(false);
-        // set start and stop triggers
         reader.Config.setStartTrigger(triggerInfo.StartTrigger);
         reader.Config.setStopTrigger(triggerInfo.StopTrigger);
+        Log.d(TAG, "Reader configured successfully.");
       } catch (InvalidUsageException | OperationFailureException e) {
-        e.printStackTrace();
+        Log.e(TAG, "Error configuring reader: " + e.getMessage());
       }
+    } else {
+      Log.w(TAG, "Reader is not connected. Configuration skipped.");
     }
   }
 
   @Override
   public void eventReadNotify(RfidReadEvents rfidReadEvents) {
-    // Each access belong to a tag.
-    // Therefore, as we are performing an access sequence on 3 Memory Banks, each
-    // tag could be reported 3 times
-    // Each tag data represents a memory bank
+    Log.d(TAG, "Received read event notification.");
     TagData[] readTags = reader.Actions.getReadTags(100);
     if (readTags != null) {
       ArrayList<String> listTags = new ArrayList<>();
       for (TagData myTag : readTags) {
         String tagID = myTag.getTagID();
-
         if (tagID != null) {
           listTags.add(tagID);
+          Log.d(TAG, "Tag read: " + tagID);
         }
       }
       listener.onRFIDRead(listTags);
+    } else {
+      Log.w(TAG, "No tags read in the event notification.");
     }
   }
 
-  // @Override
-  // public void eventReadNotify(RfidReadEvents rfidReadEvents) {
-  // // Each access belong to a tag.
-  // // Therefore, as we are performing an access sequence on 3 Memory Banks, each
-  // // tag could be reported 3 times
-  // // Each tag data represents a memory bank
-  // TagDataArray readTags = reader.Actions.getReadTagsEx(100);
-  // if (readTags != null) {
-  // ArrayList<String> listTags = new ArrayList<>();
-  // for (TagData myTag : readTags.getTags()) {
-  // String tagID = myTag.getTagID();
-
-  // if (tagID != null) {
-  // listTags.add(tagID);
-  // }
-  // }
-  // listener.onRFIDRead(listTags);
-  // }
-  // }
-
   @SuppressLint("StaticFieldLeak")
   public void eventStatusNotify(RfidStatusEvents rfidStatusEvents) {
-    Log.d(TAG, "Status Notification: " + rfidStatusEvents.StatusEventData.getStatusEventType());
+    Log.d(TAG, "Status notification: " + rfidStatusEvents.StatusEventData.getStatusEventType());
     if (rfidStatusEvents.StatusEventData.getStatusEventType() == STATUS_EVENT_TYPE.HANDHELD_TRIGGER_EVENT) {
       if (rfidStatusEvents.StatusEventData.HandheldTriggerEventData
           .getHandheldEvent() == HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_PRESSED) {
+        Log.d(TAG, "Handheld trigger pressed.");
         new AsyncTask<Void, Void, Void>() {
           @Override
           protected Void doInBackground(Void... voids) {
             try {
               reader.Actions.Inventory.perform();
+              Log.d(TAG, "Inventory started successfully.");
             } catch (InvalidUsageException | OperationFailureException e) {
-              e.printStackTrace();
+              Log.e(TAG, "Error starting inventory: " + e.getMessage());
             }
             return null;
           }
         }.execute();
-      }
-      if (rfidStatusEvents.StatusEventData.HandheldTriggerEventData
+      } else if (rfidStatusEvents.StatusEventData.HandheldTriggerEventData
           .getHandheldEvent() == HANDHELD_TRIGGER_EVENT_TYPE.HANDHELD_TRIGGER_RELEASED) {
+        Log.d(TAG, "Handheld trigger released.");
         new AsyncTask<Void, Void, Void>() {
           @Override
           protected Void doInBackground(Void... voids) {
             try {
               reader.Actions.Inventory.stop();
+              Log.d(TAG, "Inventory stopped successfully.");
             } catch (InvalidUsageException | OperationFailureException e) {
-              e.printStackTrace();
+              Log.e(TAG, "Error stopping inventory: " + e.getMessage());
             }
             return null;
           }
@@ -168,18 +154,20 @@ public class RFIDReaderInterface implements RfidEventsListener {
   }
 
   private String getMemBankData(String memoryBankData, ACCESS_OPERATION_STATUS opStatus) {
-    return (opStatus != ACCESS_OPERATION_STATUS.ACCESS_SUCCESS) ? opStatus.toString()
-        : memoryBankData;
+    Log.d(TAG, "Access operation status: " + opStatus);
+    return (opStatus != ACCESS_OPERATION_STATUS.ACCESS_SUCCESS) ? opStatus.toString() : memoryBankData;
   }
 
   public void onDestroy() {
+    Log.d(TAG, "Destroying RFIDReaderInterface.");
     try {
       reader.Events.removeEventsListener(this);
       reader.disconnect();
       reader.Dispose();
       readers.Dispose();
+      Log.d(TAG, "Reader and resources disposed successfully.");
     } catch (Exception e) {
-      e.printStackTrace();
+      Log.e(TAG, "Error during cleanup: " + e.getMessage());
     }
   }
 }

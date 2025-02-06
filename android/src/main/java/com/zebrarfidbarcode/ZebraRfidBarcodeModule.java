@@ -35,10 +35,12 @@ public class ZebraRfidBarcodeModule extends ReactContextBaseJavaModule
 
   public ZebraRfidBarcodeModule(ReactApplicationContext reactContext) {
     super(reactContext);
+    log("Initializing ZebraRfidBarcodeModule");
     configureDevice();
   }
 
   private void configureDevice() {
+    log("Configuring device");
     if (scannerInterface == null) {
       scannerInterface = new BarcodeScannerInterface(this);
     }
@@ -46,6 +48,7 @@ public class ZebraRfidBarcodeModule extends ReactContextBaseJavaModule
   }
 
   private void configureScanner(int scannerID, String scannerName) {
+    log("Configuring scanner with ID: " + scannerID + " and Name: " + scannerName);
     Thread thread = new Thread(() -> {
       scannerInterface.connectToScanner(scannerID);
       configureRFID(scannerName);
@@ -55,6 +58,7 @@ public class ZebraRfidBarcodeModule extends ReactContextBaseJavaModule
   }
 
   private void configureRFID(String name) {
+    log("Configuring RFID with Name: " + name);
     if (rfidInterface == null)
       rfidInterface = new RFIDReaderInterface(this);
     rfidInterface.connect(getReactApplicationContext(), name);
@@ -62,6 +66,7 @@ public class ZebraRfidBarcodeModule extends ReactContextBaseJavaModule
 
   @ReactMethod
   public void getAllDevices(Promise promise) {
+    log("Getting all devices");
     try {
       WritableArray listDevices = Arguments.createArray();
       for (DCSScannerInfo scannerInfo : availableScannerList) {
@@ -69,12 +74,14 @@ public class ZebraRfidBarcodeModule extends ReactContextBaseJavaModule
       }
       promise.resolve(listDevices);
     } catch (Exception e) {
+      log("Error getting all devices: " + e.getMessage());
       promise.reject("Error", e);
     }
   }
 
   @ReactMethod
   public void connectToDevice(String deviceName) {
+    log("Connecting to device: " + deviceName);
     if (scannerInterface == null) {
       scannerInterface = new BarcodeScannerInterface(this);
       availableScannerList = scannerInterface.getAvailableScanners(getReactApplicationContext());
@@ -90,6 +97,7 @@ public class ZebraRfidBarcodeModule extends ReactContextBaseJavaModule
 
   @ReactMethod
   public void sendConnectStatus(boolean isConnected) {
+    log("Sending connect status: " + isConnected);
     WritableMap params = Arguments.createMap();
     params.putString("data", isConnected ? "Connect successfully" : "Connect failed");
     sendEvent(getReactApplicationContext(), ON_DEVICE_CONNECTED, params);
@@ -97,6 +105,7 @@ public class ZebraRfidBarcodeModule extends ReactContextBaseJavaModule
 
   @ReactMethod
   public void sendRFID(ArrayList<String> listRfid) {
+    log("Sending RFID data: " + listRfid);
     WritableMap params = Arguments.createMap();
 
     WritableArray writableArray = Arguments.createArray();
@@ -110,6 +119,7 @@ public class ZebraRfidBarcodeModule extends ReactContextBaseJavaModule
 
   @ReactMethod
   public void sendBarcode(String barcode) {
+    log("Sending barcode: " + barcode);
     WritableMap params = Arguments.createMap();
     params.putString("data", barcode);
     sendEvent(getReactApplicationContext(), ON_BARCODE, params);
@@ -117,11 +127,13 @@ public class ZebraRfidBarcodeModule extends ReactContextBaseJavaModule
 
   @Override
   public void onRFIDRead(ArrayList<String> listRfid) {
+    log("RFID read: " + listRfid);
     sendRFID(listRfid);
   }
 
   @Override
   public void onBarcodeScanned(String barcode) {
+    log("Barcode scanned: " + barcode);
     sendBarcode(barcode);
   }
 
@@ -132,14 +144,21 @@ public class ZebraRfidBarcodeModule extends ReactContextBaseJavaModule
   }
 
   private void sendEvent(ReactContext reactContext, String eventName, @Nullable WritableMap params) {
+    log("Sending event: " + eventName + " with params: " + params);
     reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(eventName, params);
   }
 
   @ReactMethod
   public void addListener(String eventName) {
+    log("Adding listener for event: " + eventName);
   }
 
   @ReactMethod
   public void removeListeners(Integer count) {
+    log("Removing listeners. Count: " + count);
+  }
+
+  private void log(String message) {
+    android.util.Log.d("ZebraRfidBarcodeModule", message);
   }
 }
