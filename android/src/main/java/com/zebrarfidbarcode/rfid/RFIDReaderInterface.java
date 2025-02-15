@@ -20,6 +20,7 @@ import com.zebra.rfid.api3.START_TRIGGER_TYPE;
 import com.zebra.rfid.api3.STATUS_EVENT_TYPE;
 import com.zebra.rfid.api3.STOP_TRIGGER_TYPE;
 import com.zebra.rfid.api3.TagData;
+import com.zebra.rfid.api3.TriggerInfo;
 
 import java.util.ArrayList;
 
